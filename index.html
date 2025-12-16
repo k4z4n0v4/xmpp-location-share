@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XMPP Location Share</title>
+    <title>XMPP Live Location (XEP-0080)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="node_modules/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="./styles/app.css" />
@@ -13,11 +13,14 @@
     <header class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
             </div>
             <div>
                 <h1 class="font-bold text-lg leading-tight">XMPP Location Share</h1>
-                <p class="text-xs text-gray-400">XEP-0080 • OpenStreetMap</p>
+                <p class="text-xs text-gray-400">XEP-0080 + PEP • OpenStreetMap</p>
             </div>
         </div>
         <div id="connectionStatus" class="flex items-center gap-2 text-sm">
@@ -41,43 +44,77 @@
                 <form id="loginForm" class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">XMPP JID</label>
-                        <input type="text" id="jid" placeholder="user@example.com" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <input type="text" id="jid" placeholder="user@example.com"
+                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">Password</label>
-                        <input type="password" id="password" placeholder="••••••••" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <input type="password" id="password" placeholder="••••••••"
+                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     </div>
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <label class="block text-sm font-medium">Connection URL</label>
-                            <button type="button" id="discoverBtn" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-md">Auto-discover</button>
+                            <button type="button" id="discoverBtn"
+                                class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-md">
+                                Auto-discover
+                            </button>
                         </div>
-                        <input type="text" id="boshUrl" placeholder="wss://example.com:5281/xmpp-websocket" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <p id="discoveryStatus" class="mt-1 text-xs text-gray-400">Auto-fills based on JID domain.</p>
+                        <input type="text" id="boshUrl" placeholder="wss://example.com:5281/xmpp-websocket"
+                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <p id="discoveryStatus" class="mt-1 text-xs text-gray-400">Auto-fills as you type your JID. Edit manually or use Auto-discover.</p>
                     </div>
 
                     <div class="pt-1 space-y-2">
-                        <button type="submit" id="connectBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition">Connect</button>
-                        <button type="button" id="disconnectBtn" class="w-full py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition hidden">Disconnect</button>
+                        <button type="submit" id="connectBtn"
+                            class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition">
+                            Connect
+                        </button>
+                        <button type="button" id="disconnectBtn"
+                            class="w-full py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition hidden">
+                            Disconnect
+                        </button>
                     </div>
                 </form>
+
+                <!-- Debug Panel -->
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium">Debug Log</h4>
+                        <button id="clearLogBtn" class="text-xs text-gray-400 hover:text-white">Clear</button>
+                    </div>
+                    <div id="debugLog" class="bg-gray-900 rounded-lg p-2 h-32 overflow-y-auto text-xs font-mono text-gray-400 space-y-1">
+                        <p class="text-gray-500 italic">Logs will appear here...</p>
+                    </div>
+                </div>
             </div>
 
-            <!-- Share Panel -->
+            <!-- Share/Publish Panel -->
             <div id="panelShare" class="p-4 flex-1 overflow-y-auto hidden" data-panel="share">
                 <div id="shareNotConnected" class="text-center py-10 text-gray-500">
+                    <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
                     <p class="text-sm">Connect to publish your location.</p>
                 </div>
 
                 <div id="shareConnected" class="hidden space-y-4">
                     <div id="locationStatus" class="p-3 bg-gray-700/50 rounded-lg">
                         <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            </svg>
                             <span class="text-sm font-medium">Your Location</span>
                         </div>
                         <p id="currentLocationText" class="text-xs text-gray-400">Click "Get My Location" to fetch GPS.</p>
                     </div>
 
-                    <button id="getLocationBtn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition">Get My Location</button>
+                    <button id="getLocationBtn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Get My Location
+                    </button>
 
                     <div>
                         <label class="block text-sm font-medium mb-2">Publish Interval</label>
@@ -89,7 +126,13 @@
                         </select>
                     </div>
 
-                    <button id="shareToggleBtn" class="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition">Start Publishing</button>
+                    <button id="shareToggleBtn"
+                        class="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"/>
+                        </svg>
+                        Start Publishing
+                    </button>
 
                     <div id="sharingStatus" class="hidden p-3 bg-gray-700/50 border border-gray-600 rounded-lg">
                         <div class="flex items-center gap-2">
@@ -109,38 +152,50 @@
                 </div>
 
                 <div class="mt-4 pt-4 border-t border-gray-700">
-                    <!-- Legend -->
                     <div class="flex items-center justify-between mb-2">
                         <h4 class="text-sm font-medium">Contacts</h4>
                         <div class="flex items-center gap-2 text-xs text-gray-500">
                             <span class="flex items-center gap-1">
-                                <span class="w-2 h-2 bg-green-500 rounded-full"></span> Online
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                Online
                             </span>
                             <span class="flex items-center gap-1">
-                                <span class="w-2 h-2 bg-gray-500 rounded-full"></span> Offline
+                                <span class="w-2 h-2 bg-gray-500 rounded-full"></span>
+                                Offline
                             </span>
                         </div>
                     </div>
-
                     <div id="rosterList" class="space-y-1">
                         <p class="italic text-gray-500 text-xs">Connect to see contacts</p>
                     </div>
-
-                    <!-- Legend Note -->
-                    <p class="mt-3 text-xs text-gray-600 flex items-center gap-1">
-                        <svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                        = mutual subscription (sharing enabled)
+                    <p class="mt-3 text-xs text-gray-600">
+                        <svg class="w-3 h-3 inline text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                        </svg>
+                        = mutual subscription (location sharing works)
                     </p>
                 </div>
 
                 <div class="mt-4 pt-4 border-t border-gray-700 space-y-2">
-                    <button id="fitMarkersBtn" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Fit All Markers</button>
-                    <button id="followBtn" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Enable Auto-Follow</button>
+                    <h4 class="text-sm font-medium mb-2">Map Controls</h4>
+                    <button id="fitMarkersBtn" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">
+                        Fit All Markers
+                    </button>
+                    <button id="followBtn" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">
+                        Enable Auto-Follow
+                    </button>
+                    <button id="refreshBtn" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">
+                        Refresh All Locations
+                    </button>
                 </div>
+
+                <p class="mt-4 text-xs text-gray-500">
+                    PEP requires mutual roster subscription (both users subscribed).
+                </p>
             </div>
         </aside>
 
-        <!-- Map -->
+        <!-- Map Container -->
         <main class="flex-1 relative">
             <div id="map" class="absolute inset-0"></div>
             <div id="myLocationBadge" class="absolute top-4 left-4 z-[1000] hidden">
@@ -152,24 +207,6 @@
             <div id="toasts" class="absolute bottom-4 right-4 z-[1000] space-y-2"></div>
         </main>
     </div>
-
-    <!-- Roster Status Icons -->
-    <template id="icon-both">
-        <!-- Heart Icon -->
-        <svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-    </template>
-    <template id="icon-to">
-        <!-- Right Arrow -->
-        <svg class="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-    </template>
-    <template id="icon-from">
-        <!-- Left Arrow -->
-        <svg class="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"/></svg>
-    </template>
-    <template id="icon-none">
-        <!-- X Icon -->
-        <svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-    </template>
 
     <script type="module" src="/src/main.js"></script>
 </body>

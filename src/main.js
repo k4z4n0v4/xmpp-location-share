@@ -1,130 +1,169 @@
-import * as UI from './ui.js';
-import * as Map from './map.js';
-import * as XMPP from './xmpp.js';
-import { getDomain } from './utils.js';
+import { CONFIG } from './config.js';
+import { extractDomain } from './utils.js';
+import { Logger } from './services/logger.js';
+import { Toast } from './services/toast.js';
+import { Discovery } from './services/discovery.js';
+import { UI } from './ui/controller.js';
+import { MapController } from './map/controller.js';
+import { LocationSharing } from './location-sharing.js';
+import { XMPPClient } from './xmpp/client.js';
 
-let shareInterval = null;
-let isUrlManual = false; 
-
-const GEO_OPTS = {
-    enableHighAccuracy: true,
-    timeout: 10000
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    UI.initUI();
-    Map.initMap();
-    bindEvents();
-});
-
+/**
+ * Bind all event listeners
+ */
 function bindEvents() {
-    const jidInput = document.getElementById('jid');
-    const urlInput = document.getElementById('boshUrl');
-
-    urlInput.addEventListener('input', () => {
-        isUrlManual = urlInput.value.trim().length > 0;
-    });
-
-    jidInput.addEventListener('input', () => {
-        if (isUrlManual) return;
-
-        const domain = getDomain(jidInput.value);
-        if (domain && domain.includes('.')) {
-            urlInput.value = `wss://${domain}:5281/xmpp-websocket`;
-        } else {
-            urlInput.value = '';
+    // Tab navigation
+    document.getElementById('tabContainer').addEventListener('click', (e) => {
+        const tab = e.target.closest('[data-tab]');
+        if (tab) {
+            UI.showTab(tab.dataset.tab);
         }
     });
 
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
+    // Login form submission
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const jid = jidInput.value;
-        const pass = document.getElementById('password').value;
-        const url = urlInput.value;
-        
-        if (jid && pass && url) {
-            XMPP.connect(jid, pass, url);
-        } else {
-            UI.toast('Fill all fields', 'error');
+
+        const { jid, password, boshUrl } = UI.getFormValues();
+
+        if (!jid || !password) {
+            Toast.show('Enter JID and password', 'error');
+            return;
         }
+
+        let url = boshUrl;
+
+        // Auto-discover if no URL provided
+        if (!url) {
+            UI.setDiscoveryLoading(true);
+            UI.setDiscoveryStatus(`Discovering ${extractDomain(jid)}…`);
+
+            url = await Discovery.discoverEndpoints(extractDomain(jid));
+
+            UI.setDiscoveryLoading(false);
+
+            if (!url) {
+                UI.setDiscoveryStatus('Discovery failed. Enter URL manually.');
+                Toast.show('No endpoint found', 'error');
+                return;
+            }
+
+            UI.setBoshUrl(url, true);
+            UI.setDiscoveryStatus('Endpoint discovered.');
+        }
+
+        XMPPClient.connect(jid, password, url);
     });
 
+    // Auto-discover button
     document.getElementById('discoverBtn').addEventListener('click', async () => {
-        const jid = jidInput.value;
-        const domain = getDomain(jid);
-        if (!domain) return UI.toast('Enter JID first', 'warn');
-        
-        const url = await XMPP.discover(domain);
-        
+        const { jid } = UI.getFormValues();
+        const domain = extractDomain(jid);
+
+        if (!domain) {
+            Toast.show('Enter JID first', 'error');
+            return;
+        }
+
+        UI.setDiscoveryLoading(true);
+        UI.setDiscoveryStatus(`Discovering ${domain}…`);
+
+        const url = await Discovery.discoverEndpoints(domain);
+
+        UI.setDiscoveryLoading(false);
+
         if (url) {
-            urlInput.value = url;
-            isUrlManual = true; 
-            UI.toast('Found endpoint!', 'success');
+            UI.setBoshUrl(url, true);  // Mark as from discovery
+            UI.setDiscoveryStatus('Endpoint discovered.');
+            Toast.show('Endpoint found', 'success');
         } else {
-            UI.toast('Discovery failed (enter manually)', 'error');
+            UI.setDiscoveryStatus('Discovery failed. Enter URL manually.');
+            Toast.show('Discovery failed', 'error');
         }
     });
 
-    document.getElementById('getLocationBtn').onclick = () => {
-        navigator.geolocation.getCurrentPosition(pos => {
-            const { latitude, longitude, accuracy } = pos.coords;
-            Map.updateMyPos(latitude, longitude, accuracy);
-            Map.centerMap(latitude, longitude);
-            
-            document.getElementById('currentLocationText').innerHTML = 
-                `${latitude.toFixed(5)}, ${longitude.toFixed(5)} <br> (±${Math.round(accuracy)}m)`;
-        }, err => {
-            UI.toast(err.message, 'error');
-        }, GEO_OPTS); 
-    };
+    // Disconnect button
+    document.getElementById('disconnectBtn').addEventListener('click', () => {
+        LocationSharing.stop();
+        XMPPClient.disconnect();
+    });
 
-    const toggleBtn = document.getElementById('shareToggleBtn');
-    toggleBtn.onclick = () => {
-        if (shareInterval) {
-            // Stop
-            clearInterval(shareInterval);
-            shareInterval = null;
-            
-            if (XMPP.isConnected()) XMPP.publishRetract();
+    // Clear log button
+    document.getElementById('clearLogBtn').addEventListener('click', () => {
+        Logger.clear();
+    });
 
-            toggleBtn.textContent = 'Start Publishing';
-            toggleBtn.className = 'w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition';
-            document.getElementById('sharingStatus').classList.add('hidden');
-        } else {
-            // Start
-            if (!XMPP.isConnected()) return UI.toast('Not connected!', 'error');
-            
-            toggleBtn.textContent = 'Stop Publishing';
-            toggleBtn.className = 'w-full py-3 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition';
-            document.getElementById('sharingStatus').classList.remove('hidden');
-            
-            publishOnce();
-            const secs = document.getElementById('shareInterval').value;
-            shareInterval = setInterval(publishOnce, secs * 1000);
+    // Get location button
+    document.getElementById('getLocationBtn').addEventListener('click', async () => {
+        const loc = await LocationSharing.fetchLocation();
+        if (loc) {
+            MapController.centerOn(loc.lat, loc.lon, 16);
+            Toast.show('Location updated', 'success');
         }
-    };
-    
-    document.getElementById('fitMarkersBtn').onclick = () => Map.fitBounds();
-    document.getElementById('followBtn').onclick = (e) => {
-        const isActive = e.target.classList.contains('bg-indigo-600');
-        e.target.classList.toggle('bg-indigo-600');
-        e.target.classList.toggle('bg-gray-700');
-        Map.setAutoFollow(!isActive);
-    };
-    
-    document.getElementById('disconnectBtn').onclick = () => {
-        if(shareInterval) toggleBtn.click();
-        XMPP.disconnect();
-    }
+    });
+
+    // Share toggle button
+    document.getElementById('shareToggleBtn').addEventListener('click', () => {
+        LocationSharing.toggle();
+    });
+
+    // Fit markers button
+    document.getElementById('fitMarkersBtn').addEventListener('click', () => {
+        MapController.fitAllMarkers();
+    });
+
+    // Follow button
+    document.getElementById('followBtn').addEventListener('click', () => {
+        MapController.toggleAutoFollow();
+    });
+
+    // Refresh button
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        XMPPClient.refreshAllLocations();
+    });
+
+    // User list clicks (event delegation)
+    document.getElementById('userList').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-center-jid]');
+        if (item) {
+            const jid = item.dataset.centerJid;
+            const marker = MapController.getMarkers()[jid];
+            if (marker) {
+                MapController.centerOn(marker.lat, marker.lon, 16);
+            }
+        }
+    });
 }
 
-function publishOnce() {
-    navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        XMPP.publishLocation(pos.coords); 
-        Map.updateMyPos(latitude, longitude, accuracy);
-        document.getElementById('lastShareTime').textContent = 'Last: ' + new Date().toLocaleTimeString();
-    }, err => {
-        console.error('GPS Error', err);
-    }, GEO_OPTS);
+/**
+ * Initialize the application
+ */
+function init() {
+    // Initialize services
+    Logger.init('debugLog');
+    Toast.init('toasts');
+    UI.init();
+    MapController.init('map');
+
+    // Wire up dependencies
+    LocationSharing.setXMPPClient(XMPPClient);
+
+    // Bind event handlers
+    bindEvents();
+
+    // Periodic user list update
+    setInterval(() => {
+        if (Object.keys(MapController.getMarkers()).length > 0) {
+            XMPPClient.updateUserList();
+        }
+    }, CONFIG.userListUpdateInterval);
+
+    Logger.log('XMPP Location Share initialized');
+}
+
+// Start the app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
 }
