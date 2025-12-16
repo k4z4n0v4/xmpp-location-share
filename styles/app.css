@@ -1,0 +1,41 @@
+#map {
+    height: 100%;
+    width: 100%;
+}
+
+.user-marker {
+    border-radius: 50%;
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.08);
+        opacity: 0.85;
+    }
+}
+
+.tab-active {
+    background: #4f46e5;
+    color: white;
+}
+
+.sharing-pulse {
+    animation: sharingPulse 1.5s infinite;
+}
+
+@keyframes sharingPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+    }
+}

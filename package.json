@@ -1,0 +1,28 @@
+{
+  "name": "xmpp-location-share",
+  "version": "1.0.0",
+  "description": "Real-time location sharing over XMPP using XEP-0080",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "strophe.js": "^3.1.0"
+  },
+  "devDependencies": {
+    "vite": "^7.3.0"
+  },
+  "keywords": [
+    "xmpp",
+    "location",
+    "geolocation",
+    "xep-0080",
+    "pep",
+    "leaflet"
+  ],
+  "author": "",
+  "license": "MIT"
+}
